@@ -38,13 +38,19 @@ class AI(BaseAI):
             str: The name of your Player.
         """
         # <<-- Creer-Merge: get-name -->> - Code you add between this comment and the end comment will be preserved between Creer re-runs.
-        return "Newtonian Python Player"  # REPLACE THIS WITH YOUR TEAM NAME
+        return "☢︎☢︎☢︎"  # REPLACE THIS WITH YOUR TEAM NAME
         # <<-- /Creer-Merge: get-name -->>
 
     def start(self):
         """ This is called once the game starts and your AI knows its player and
             game. You can initialize your AI here.
         """
+        self.intern_cnt = 1
+        self.physicist_cnt = 1
+        self.manager_cnt = 1
+        self.interns = {}
+        self.physicists = {}
+        self.managers = {}
         # <<-- Creer-Merge: start -->> - Code you add between this comment and the end comment will be preserved between Creer re-runs.
         # replace with your start logic
 
@@ -82,11 +88,12 @@ class AI(BaseAI):
         """
         # <<-- Creer-Merge: runTurn -->> - Code you add between this comment and the end comment will be preserved between Creer re-runs.
         # Put your game logic here for runTurn
-
         """
         Please note: This code is intentionally bad. You should try to optimize everything here. THe code here is only to show you how to use the game's
                      mechanics with the MegaMinerAI server framework.
         """
+        import random
+        random.seed(None)
 
         # Goes through all the units that you own.
         for unit in self.player.units:
@@ -100,10 +107,21 @@ class AI(BaseAI):
                     # Note: You need to get redium ore as well.
                     target = None
 
+                    if unit.id in self.physicists:
+                        mat_type = self.physicists[unit.id]
+                    else:
+                        mat_type = "redium" if self.physicist_cnt % 2 == 0 else "blueium"
+                        self.physicists[unit.id] = mat_type
+                        self.physicist_cnt += 1
+
                     # Goes through all the machines in the game and picks one that is ready to process ore as its target.
                     for machine in self.game.machines:
-                        if machine.tile.blueium_ore >= machine.refine_input:
-                            target = machine.tile
+                        if mat_type == "blueium":
+                            if machine.tile.blueium_ore >= machine.refine_input:
+                                target = machine.tile
+                        else:
+                            if machine.tile.redium_ore >= machine.refine_input:
+                                target = machine.tile
 
                     if target is None:
                         # Chases down enemy managers if there are no machines that are ready to be worked.
@@ -111,9 +129,13 @@ class AI(BaseAI):
                             # Only does anything if the unit that we found is a manager and belongs to our opponent.
                             if enemy.tile is not None and enemy.owner == self.player.opponent and enemy.job.title == 'manager':
                                 # Moves towards the manager.
-                                while unit.moves > 0 and len(self.find_path(unit.tile, enemy.tile)) > 0:
+                                while unit.moves > 0 and len(
+                                        self.find_path(unit.tile,
+                                                       enemy.tile)) > 0:
                                     # Moves until there are no moves left for the physicist.
-                                    if not unit.move(self.find_path(unit.tile, enemy.tile)[0]):
+                                    if not unit.move(
+                                            self.find_path(
+                                                unit.tile, enemy.tile)[0]):
                                         break
 
                                 if unit.tile in enemy.tile.get_neighbors():
@@ -133,8 +155,11 @@ class AI(BaseAI):
                                 adjacent = True
 
                         # If there is a machine that is waiting to be worked on, go to it.
-                        while unit.moves > 0 and len(self.find_path(unit.tile, target)) > 1 and not adjacent:
-                            if not unit.move(self.find_path(unit.tile, target)[0]):
+                        while unit.moves > 0 and len(
+                                self.find_path(unit.tile,
+                                               target)) > 1 and not adjacent:
+                            if not unit.move(
+                                    self.find_path(unit.tile, target)[0]):
                                 break
 
                         # Acts on the target machine to run it if the physicist is adjacent.
@@ -144,93 +169,230 @@ class AI(BaseAI):
                 elif unit.job.title == 'intern':
                     # If the unit is an intern, collects blueium ore.
                     # Note: You also need to collect redium ore.
+                    if unit.id in self.interns:
+                        mat_type = self.interns[unit.id]
+                    else:
+                        mat_type = "redium" if self.intern_cnt % 2 == 0 else "blueium"
+                        self.interns[unit.id] = mat_type
+                        self.intern_cnt += 1
 
-                    # Goes to gather resources if currently carrying less than the carry limit.
-                    if unit.blueium_ore < unit.job.carry_limit:
-                        # Your intern's current target.
-                        target = None
+                    unit.log(
+                        str(unit.blueium_ore) + " : " + str(unit.redium_ore))
 
-                        # Goes to collect blueium ore that isn't on a machine.
-                        for tile in self.game.tiles:
-                            if tile.blueium_ore > 0 and tile.machine is None:
-                                target = tile
-                                break
+                    if mat_type == "blueium":
+                        # Goes to gather resources if currently carrying less than the carry limit.
+                        if unit.blueium_ore < unit.job.carry_limit:
+                            # Your intern's current target.
+                            target = None
 
-                        # Moves towards our target until at the target or out of moves.
-                        if len(self.find_path(unit.tile, target)) > 0:
-                            while unit.moves > 0 and len(self.find_path(unit.tile, target)) > 0:
-                                if not unit.move(self.find_path(unit.tile, target)[0]):
+                            # Goes to collect blueium ore that isn't on a machine.
+                            for tile in self.game.tiles:
+                                if tile.blueium_ore > 0 and tile.machine is None:
+                                    target = tile
                                     break
 
-                        # Picks up the appropriate resource once we reach our target's tile.
-                        if unit.tile == target and target.blueium_ore > 0:
-                            unit.pickup(target, 0, 'blueium ore')
-
-                    else:
-                        # Deposits blueium ore in a machine for it if we have any.
-
-                        # Finds a machine in the game's tiles that takes blueium ore.
-                        for tile in self.game.tiles:
-                            if tile.machine is not None and tile.machine.ore_type == 'blueium':
-                                # Moves towards the found machine until we reach it or are out of moves.
-                                while unit.moves > 0 and len(self.find_path(unit.tile, tile)) > 1:
-                                    if not unit.move(self.find_path(unit.tile, tile)[0]):
+                            # Moves towards our target until at the target or out of moves.
+                            if len(self.find_path(unit.tile, target)) > 0:
+                                while unit.moves > 0 and len(
+                                        self.find_path(unit.tile, target)) > 0:
+                                    if not unit.move(
+                                            self.find_path(unit.tile,
+                                                           target)[0]):
                                         break
 
-                                # Deposits blueium ore on the machine if we have reached it.
-                                if len(self.find_path(unit.tile, tile)) <= 1:
-                                    unit.drop(tile, 0, 'blueium ore')
+                            # Picks up the appropriate resource once we reach our target's tile.
+                            if unit.tile == target and target.blueium_ore > 0:
+                                unit.pickup(target, 0, 'blueium ore')
+
+                        else:
+                            # Deposits blueium ore in a machine for it if we have any.
+
+                            # Finds a machine in the game's tiles that takes blueium ore.
+                            for tile in self.game.tiles:
+                                if tile.machine is not None and tile.machine.ore_type == 'blueium':
+                                    # Moves towards the found machine until we reach it or are out of moves.
+                                    while unit.moves > 0 and len(
+                                            self.find_path(unit.tile,
+                                                           tile)) > 1:
+                                        if not unit.move(
+                                                self.find_path(
+                                                    unit.tile, tile)[0]):
+                                            break
+
+                                    # Deposits blueium ore on the machine if we have reached it.
+                                    if len(self.find_path(unit.tile,
+                                                          tile)) <= 1:
+                                        unit.drop(tile, 0, 'blueium ore')
+
+                    else:
+                        if unit.redium_ore < unit.job.carry_limit:
+                            # Your intern's current target.
+                            target = None
+
+                            # Goes to collect blueium ore that isn't on a machine.
+                            for tile in self.game.tiles:
+                                if tile.redium_ore > 0 and tile.machine is None:
+                                    target = tile
+                                    break
+
+                            # Moves towards our target until at the target or out of moves.
+                            if len(self.find_path(unit.tile, target)) > 0:
+                                while unit.moves > 0 and len(
+                                        self.find_path(unit.tile, target)) > 0:
+                                    if not unit.move(
+                                            self.find_path(unit.tile,
+                                                           target)[0]):
+                                        break
+
+                            # Picks up the appropriate resource once we reach our target's tile.
+                            if unit.tile == target and target.redium_ore > 0:
+                                unit.pickup(target, 0, 'redium ore')
+
+                        else:
+                            # Deposits redium ore in a machine for it if we have any.
+
+                            # Finds a machine in the game's tiles that takes blueium ore.
+                            for tile in self.game.tiles:
+                                if tile.machine is not None and tile.machine.ore_type == 'redium':
+                                    # Moves towards the found machine until we reach it or are out of moves.
+                                    while unit.moves > 0 and len(
+                                            self.find_path(unit.tile,
+                                                           tile)) > 1:
+                                        if not unit.move(
+                                                self.find_path(
+                                                    unit.tile, tile)[0]):
+                                            break
+
+                                    # Deposits blueium ore on the machine if we have reached it.
+                                    if len(self.find_path(unit.tile,
+                                                          tile)) <= 1:
+                                        unit.drop(tile, 0, 'redium ore')
 
                 elif unit.job.title == 'manager':
                     # Finds enemy interns, stuns, and attacks them if there is no blueium to take to the generator.
                     target = None
+                    if unit.id in self.managers:
+                        mat_type = self.managers[unit.id]
+                    else:
+                        mat_type = "redium" if self.manager_cnt % 2 == 0 else "blueium"
+                        self.managers[unit.id] = mat_type
+                        self.manager_cnt += 1
 
                     for tile in self.game.tiles:
-                        if tile.blueium > 1 and unit.blueium < unit.job.carry_limit:
-                            target = tile
+                        if mat_type == "blueium":
+                            if tile.blueium > 1 and unit.blueium < unit.job.carry_limit:
+                                target = tile
+                        else:
+                            if tile.redium > 1 and unit.redium < unit.job.carry_limit:
+                                target = tile
 
-                    if target is None and unit.blueium == 0:
-                        for enemy in self.game.units:
-                            # Only does anything for an intern that is owned by your opponent.
-                            if enemy.tile is not None and enemy.owner == self.player.opponent and enemy.job.title == 'intern':
-                                # Moves towards the intern until reached or out of moves.
-                                while unit.moves > 0 and len(self.find_path(unit.tile, enemy.tile)) > 0:
-                                    if not unit.move(self.find_path(unit.tile, enemy.tile)[0]):
-                                        break
+                    if mat_type == "blueium":
+                        if target is None and unit.blueium == 0:
+                            for enemy in self.game.units:
+                                # Only does anything for an intern that is owned by your opponent.
+                                if enemy.tile is not None and enemy.owner == self.player.opponent and enemy.job.title == 'intern':
+                                    # Moves towards the intern until reached or out of moves.
+                                    while unit.moves > 0 and len(
+                                            self.find_path(
+                                                unit.tile, enemy.tile)) > 0:
+                                        if not unit.move(
+                                                self.find_path(
+                                                    unit.tile, enemy.tile)[0]):
+                                            break
 
-                                # Either stuns or attacks the intern if we are within range.
-                                if unit.tile in enemy.tile.get_neighbors():
-                                    if enemy.stun_time == 0 and enemy.stun_immune == 0:
-                                        # Stuns the enemy intern if they are not stunned and not immune.
-                                        unit.act(enemy.tile)
-                                    else:
-                                        # Attacks the intern otherwise.
-                                        unit.attack(enemy.tile)
-                                break
+                                    # Either stuns or attacks the intern if we are within range.
+                                    if unit.tile in enemy.tile.get_neighbors():
+                                        if enemy.stun_time == 0 and enemy.stun_immune == 0:
+                                            # Stuns the enemy intern if they are not stunned and not immune.
+                                            unit.act(enemy.tile)
+                                        else:
+                                            # Attacks the intern otherwise.
+                                            unit.attack(enemy.tile)
+                                    break
 
-                    elif target is not None:
-                        # Moves towards our target until at the target or out of moves.
-                        while unit.moves > 0 and len(self.find_path(unit.tile, target)) > 1:
-                            if not unit.move(self.find_path(unit.tile, target)[0]):
-                                break
+                        elif target is not None:
+                            # Moves towards our target until at the target or out of moves.
+                            while unit.moves > 0 and len(
+                                    self.find_path(unit.tile, target)) > 1:
+                                if not unit.move(
+                                        self.find_path(unit.tile, target)[0]):
+                                    break
 
-                        # Picks up blueium once we reach our target's tile.
-                        if len(self.find_path(unit.tile, target)) <= 1 and target.blueium > 0:
-                            unit.pickup(target, 0, 'blueium')
+                            # Picks up blueium once we reach our target's tile.
+                            if len(self.find_path(
+                                    unit.tile,
+                                    target)) <= 1 and target.blueium > 0:
+                                unit.pickup(target, 0, 'blueium')
 
-                    elif target is None and unit.blueium > 0:
-                        # Stores a tile that is part of your generator.
-                        gen_tile = self.player.generator_tiles[0]
+                        elif target is None and unit.blueium > 0:
+                            # Stores a tile that is part of your generator.
+                            gen_tile = self.player.generator_tiles[0]
 
-                        # Goes to your generator and drops blueium in.
-                        while unit.moves > 0 and len(self.find_path(unit.tile, gen_tile)) > 0:
-                            if not unit.move(self.find_path(unit.tile, gen_tile)[0]):
-                                break
+                            # Goes to your generator and drops blueium in.
+                            while unit.moves > 0 and len(
+                                    self.find_path(unit.tile, gen_tile)) > 0:
+                                if not unit.move(
+                                        self.find_path(unit.tile,
+                                                       gen_tile)[0]):
+                                    break
 
-                        # Deposits blueium in our generator if we have reached it.
-                        if len(self.find_path(unit.tile, gen_tile)) <= 1:
-                            unit.drop(gen_tile, 0, 'blueium')
+                            # Deposits blueium in our generator if we have reached it.
+                            if len(self.find_path(unit.tile, gen_tile)) <= 1:
+                                unit.drop(gen_tile, 0, 'blueium')
 
+                    else:
+                        if target is None and unit.redium == 0:
+                            for enemy in self.game.units:
+                                # Only does anything for an intern that is owned by your opponent.
+                                if enemy.tile is not None and enemy.owner == self.player.opponent and enemy.job.title == 'intern':
+                                    # Moves towards the intern until reached or out of moves.
+                                    while unit.moves > 0 and len(
+                                            self.find_path(
+                                                unit.tile, enemy.tile)) > 0:
+                                        if not unit.move(
+                                                self.find_path(
+                                                    unit.tile, enemy.tile)[0]):
+                                            break
+
+                                    # Either stuns or attacks the intern if we are within range.
+                                    if unit.tile in enemy.tile.get_neighbors():
+                                        if enemy.stun_time == 0 and enemy.stun_immune == 0:
+                                            # Stuns the enemy intern if they are not stunned and not immune.
+                                            unit.act(enemy.tile)
+                                        else:
+                                            # Attacks the intern otherwise.
+                                            unit.attack(enemy.tile)
+                                    break
+
+                        elif target is not None:
+                            # Moves towards our target until at the target or out of moves.
+                            while unit.moves > 0 and len(
+                                    self.find_path(unit.tile, target)) > 1:
+                                if not unit.move(
+                                        self.find_path(unit.tile, target)[0]):
+                                    break
+
+                            # Picks up blueium once we reach our target's tile.
+                            if len(self.find_path(
+                                    unit.tile,
+                                    target)) <= 1 and target.redium > 0:
+                                unit.pickup(target, 0, 'redium')
+
+                        elif target is None and unit.redium > 0:
+                            # Stores a tile that is part of your generator.
+                            gen_tile = self.player.generator_tiles[0]
+
+                            # Goes to your generator and drops blueium in.
+                            while unit.moves > 0 and len(
+                                    self.find_path(unit.tile, gen_tile)) > 0:
+                                if not unit.move(
+                                        self.find_path(unit.tile,
+                                                       gen_tile)[0]):
+                                    break
+
+                            # Deposits blueium in our generator if we have reached it.
+                            if len(self.find_path(unit.tile, gen_tile)) <= 1:
+                                unit.drop(gen_tile, 0, 'redium')
 
         return True
         # <<-- /Creer-Merge: runTurn -->>
@@ -286,8 +448,7 @@ class AI(BaseAI):
                 # if the tile exists, has not been explored or added to the
                 # fringe yet, and it is pathable
                 if neighbor and neighbor.id not in came_from and (
-                    neighbor.is_pathable()
-                ):
+                        neighbor.is_pathable()):
                     # add it to the tiles to be explored and add where it came
                     # from for path reconstruction.
                     fringe.append(neighbor)
@@ -368,12 +529,13 @@ class AI(BaseAI):
             else:
                 print(' ' + str(y))
 
-        print('\nTurn: ' + str(self.game.current_turn) + ' / '
-              + str(self.game.max_turns))
-        print(Fore.CYAN + 'Heat: ' + str(self.player.heat)
-              + '\tPressure: ' + str(self.player.pressure) + Fore.RESET)
-        print(Fore.MAGENTA + 'Heat: ' + str(self.player.opponent.heat)
-              + '\tPressure: ' + str(self.player.opponent.pressure) + Fore.RESET)
+        print('\nTurn: ' + str(self.game.current_turn) + ' / ' +
+              str(self.game.max_turns))
+        print(Fore.CYAN + 'Heat: ' + str(self.player.heat) + '\tPressure: ' +
+              str(self.player.pressure) + Fore.RESET)
+        print(Fore.MAGENTA + 'Heat: ' + str(self.player.opponent.heat) +
+              '\tPressure: ' + str(self.player.opponent.pressure) + Fore.RESET)
 
         return
+
     # <<-- /Creer-Merge: functions -->>
